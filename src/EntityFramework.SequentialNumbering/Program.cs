@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
         public int Id { get; set; }
 
         public DateTime Created { get; set; }
+        [Column(TypeName = "decimal(10,0)")]
         public decimal Number { get; set; }
     }
 
@@ -39,7 +41,7 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
 
     class Program
     {
-        static async Task<int> CreateOrder()
+        static async Task<int> CreateOrder(int dayOffset)
         {
             using (var context = new SeqNumContext())
             {
@@ -49,13 +51,13 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
                 {
                     order = new Order()
                     {
-                        Created = DateTime.UtcNow,
+                        Created = DateTime.UtcNow.AddDays(dayOffset),
                     };
 
                     context.Orders.Add(order);
 
                     await context.SaveChangesAsync();
-                    
+
                     transaction.Commit();
                 }
 
@@ -64,9 +66,10 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
                     order.Created.Month * 1000000 +
                     order.Created.Day * 10000 +
                     1;
+                var lastDailyOrder = firstDailyOrder + 9998;
 
-                await context.Database.ExecuteSqlCommandAsync($"update oo set oo.[Number] = {firstDailyOrder} + (select count(Id) from [Orders] io where io.[Number] >= {firstDailyOrder}) from [Orders] oo (tablock) where oo.[Id] = {order.Id}");
-                
+                await context.Database.ExecuteSqlCommandAsync($"update oo set oo.[Number] = isnull((select max([Number]) from [Orders] io where io.[Number] >= {firstDailyOrder} and io.[Number] <= {lastDailyOrder}) + 1, {firstDailyOrder}) from [Orders] oo (tablock) where oo.[Id] = {order.Id}");
+
                 return order.Id;
             }
         }
@@ -87,6 +90,7 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
 
             var runningTasks = new Dictionary<int, Task>();
 
+            var random = new Random();
             using (var throttle = new SemaphoreSlim(20, 20))
             {
                 for (var i = 0; i < numberOfOrders; i++)
@@ -95,12 +99,18 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
 
                     await throttle.WaitAsync();
 
+                    var dayOffset = random.Next(-1, 1);
+
                     Task task = null;
                     task = Task.Run(async () =>
                     {
                         try
                         {
-                            await CreateOrder();
+                            await CreateOrder(dayOffset);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"Run failed: {ex.Message}");
                         }
                         finally
                         {
