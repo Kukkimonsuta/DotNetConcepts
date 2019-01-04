@@ -33,6 +33,9 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<Order>()
+                .HasQueryFilter(o => o.Number != 0);
+
+            modelBuilder.Entity<Order>()
                 .HasIndex(x => x.Number)
                 .IsUnique()
                 .HasFilter("[Number] != 0");
