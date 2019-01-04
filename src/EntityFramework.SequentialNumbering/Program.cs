@@ -25,6 +25,16 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
 
             base.OnConfiguring(optionsBuilder);
         }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Order>()
+                .HasIndex(x => x.Number)
+                .IsUnique()
+                .HasFilter("[Number] != 0");
+        }
     }
 
     class Program
@@ -45,7 +55,7 @@ namespace DotNetConcepts.EntityFramework.SequentialNumbering
                     context.Orders.Add(order);
 
                     await context.SaveChangesAsync();
-
+                    
                     transaction.Commit();
                 }
 
